@@ -17,28 +17,6 @@ import os
 import re
 
 
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-
-
-def get_device():
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        if torch.backends.mps.is_available():
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
-    return device
-
-
 def get_device():
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -65,14 +43,10 @@ def save_image(image, save_path):
     _to_pil(image).save(str(save_path), quality=100)
 
 
-def get_elapsed_time(start_time):
-    return timedelta(seconds=round(time() - start_time))
-
-
-def denorm(tensor):
-    tensor /= 2
-    tensor += 0.5
-    return tensor
+def denorm(x, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
+    return TF.normalize(
+        x, mean=-(np.array(mean) / np.array(std)), std=(1 / np.array(std)),
+    )
 
 
 def image_to_grid(image, n_cols):
@@ -101,26 +75,6 @@ def print_n_prams(model):
         if p.requires_grad:
             n_trainable_params += n
     print(f"[ # OF PARAMS: {n_params:,} ][ # OF TRAINABLE PARAMS: {n_trainable_params:,} ]")
-
-
-
-
-def get_linear_beta_schdule(init_beta, fin_beta, n_timesteps):
-    # "We set the forward process variances to constants increasing linearly."
-    # return torch.linspace(init_beta, fin_beta, n_timesteps) # "$\beta_{t}$"
-    return torch.linspace(init_beta, fin_beta, n_timesteps + 1) # "$\beta_{t}$"
-
-
-def index(x, t):
-    return x[t].view(-1, 1, 1, 1)
-
-
-def sample_noise(batch_size, n_channels, img_size, device):
-    return torch.randn(batch_size, n_channels, img_size, img_size, device=device)
-
-
-def sample_t(n_timesteps, batch_size, device):
-    return torch.randint(low=0, high=n_timesteps, size=(batch_size,), device=device)
 
 
 def modify_state_dict(state_dict, keyword="_orig_mod."):
