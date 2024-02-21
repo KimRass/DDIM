@@ -171,6 +171,8 @@ class UNet(nn.Module):
 
         assert all([i < len(ch_mult) for i in attn]), "attn index out of bound"
 
+        self.n_diffusion_steps = n_diffusion_steps
+
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(
             n_diffusion_steps=n_diffusion_steps, d_model=ch, dim=tdim,
@@ -263,11 +265,11 @@ class DDIM(nn.Module):
 
     def __init__(
         self,
-        net,
+        model,
         img_size,
         device,
         image_channels=3,
-        n_ddim_diffusion_steps=50,
+        n_ddim_steps=50,
         ddim_eta=0,
         n_diffusion_steps=1000,
         init_beta=0.0001,
@@ -278,19 +280,20 @@ class DDIM(nn.Module):
         self.img_size = img_size
         self.device = device
         self.image_channels = image_channels
+        self.n_ddim_steps = n_ddim_steps
         self.ddim_eta = ddim_eta
         self.n_diffusion_steps = n_diffusion_steps
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        self.ddim_diffusion_step_size = n_diffusion_steps // n_ddim_diffusion_steps
+        self.ddim_step_size = n_diffusion_steps // n_ddim_steps
 
         self.beta = self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        self.net = net.to(device)
-        self.n_diffusion_steps = self.net.n_diffusion_steps
+        self.model = model.to(device)
+        self.n_diffusion_steps = self.model.n_diffusion_steps
 
     @staticmethod
     def index(x, diffusion_step):
@@ -325,7 +328,7 @@ class DDIM(nn.Module):
 
         alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         prev_alpha_bar_t = self.index(
-            self.alpha_bar, diffusion_step=diffusion_step - self.ddim_diffusion_step_size,
+            self.alpha_bar, diffusion_step=diffusion_step - self.ddim_step_size,
         )
         
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
@@ -344,9 +347,14 @@ class DDIM(nn.Module):
 
     def perform_denoising_process(self, noisy_image):
         x = noisy_image
-        for diffusion_step_idx in reversed(
-            range(0, self.n_diffusion_steps, self.ddim_diffusion_step_size),
-        ):
+        pbar = tqdm(
+            reversed(range(0, self.n_diffusion_steps, self.ddim_step_size)),
+            total=self.n_ddim_steps,
+            leave=False,
+        )
+        for diffusion_step_idx in pbar:
+            pbar.set_description("Denoising...")
+
             x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
         return x
 
@@ -360,13 +368,11 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = DDIM(img_size=32, n_ddim_diffusion_steps=20, ddim_eta=0.5, device=DEVICE)
+    net = UNet()
+    model = DDIM(model=net, img_size=32, n_ddim_steps=20, ddim_eta=0.5, device=DEVICE)
     model_params_path = "/Users/jongbeomkim/Downloads/ddpm_celeba_32×32.pth"
     state_dict = torch.load(str(model_params_path), map_location=DEVICE)
     model.load_state_dict(state_dict["model"])
-    # model.ddim_diffusion_step
-    # for ddim_diffusion_step_idx in reversed(range(0, model.n_diffusion_steps, model.n_diffusion_steps // model.n_ddim_diffusion_steps))
-    # list(range(0, model.n_diffusion_steps, model.n_diffusion_steps // model.n_ddim_diffusion_steps))
 
     gen_image = model.sample(batch_size=36)
     gen_grid = image_to_grid(gen_image, n_cols=6)
