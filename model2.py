@@ -253,44 +253,56 @@ class UNet(nn.Module):
 
 
 class DDIM(nn.Module):
-    # "We set T = 1000 without a sweep."
-    # "We chose a linear schedule from $\beta_{1} = 10^{-4}$ to  $\beta_{T} = 0:02$."
-    def __init__(self, device, n_diffusion_steps=1000, n_ddim_diffusion_steps=50, ddim_eta=0, init_beta=0.0001, fin_beta=0.02):
+    def get_linear_beta_schdule(self):
+        return torch.linspace(
+            self.init_beta,
+            self.fin_beta,
+            self.n_diffusion_steps,
+            device=self.device,
+        )
+
+    def __init__(
+        self,
+        img_size,
+        device,
+        image_channels=3,
+        n_ddim_diffusion_steps=50,
+        ddim_eta=0,
+        n_diffusion_steps=1000,
+        init_beta=0.0001,
+        fin_beta=0.02,
+    ):
         super().__init__()
 
+        self.img_size = img_size
         self.device = device
+        self.image_channels = image_channels
+        self.ddim_eta = ddim_eta
         self.n_diffusion_steps = n_diffusion_steps
-        self.n_ddim_diffusion_steps = n_ddim_diffusion_steps
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        self.ddim_diffusion_step = torch.arange(
-            0, n_diffusion_steps, n_diffusion_steps // n_ddim_diffusion_steps,
-        )
-        # print(self.ddim_diffusion_step)
+        self.ddim_diffusion_step_size = n_diffusion_steps // n_ddim_diffusion_steps
+
         self.beta = self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
-        self.ddim_alpha_bar = self.alpha_bar[self.ddim_diffusion_step]
-        # print(self.ddim_alpha_bar)
-        self.ddim_prev_alpha_bar = torch.cat([self.alpha_bar[: 1], self.ddim_alpha_bar[: -1]], dim=0)
-        self.ddim_sigma = ddim_eta * ((1 - self.ddim_prev_alpha_bar) / (1 - self.ddim_alpha_bar) * (1 - self.ddim_alpha_bar / self.ddim_prev_alpha_bar)) ** 0.5
-        # print(self.ddim_sigma)
-
         self.model = UNet(n_diffusion_steps=n_diffusion_steps).to(device)
-
-    def get_linear_beta_schdule(self):
-        return torch.linspace(self.init_beta, self.fin_beta, self.n_diffusion_steps, device=self.device)
 
     @staticmethod
     def index(x, diffusion_step):
         return torch.index_select(
-            x, dim=0, index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
+            x,
+            dim=0,
+            index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
         )[:, None, None, None]
 
-    def sample_noise(self, batch_size, n_channels, img_size):
-        return torch.randn(size=(batch_size, n_channels, img_size, img_size), device=self.device)
+    def sample_noise(self, batch_size):
+        return torch.randn(
+            size=(batch_size, self.image_channels, self.img_size, self.img_size),
+            device=self.device,
+        )
 
     def batchify_diffusion_steps(self, diffusion_step_idx, batch_size):
         return torch.full(
@@ -303,46 +315,42 @@ class DDIM(nn.Module):
     def forward(self, noisy_image, diffusion_step):
         return self.model(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
-    def take_ddim_denoising_step(self, noisy_image, diffusion_step, ddim_diffusion_step_idx):
-        # print(ddim_diffusion_step_idx, diffusion_step)
-        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
+    @torch.inference_mode()
+    def take_denoising_step(self, noisy_image, diffusion_step_idx):
+        diffusion_step = self.batchify_diffusion_steps(
+            diffusion_step_idx=diffusion_step_idx, batch_size=noisy_image.size(0),
+        )
 
-        ddim_diffusion_step = self.batchify_diffusion_steps(
-            diffusion_step_idx=ddim_diffusion_step_idx, batch_size=noisy_image.size(0),
-        )
-        # alpha_bar_t = self.ddim_alpha_bar[ddim_diffusion_step_idx]
-        alpha_bar_t = self.index(
-            self.ddim_alpha_bar, diffusion_step=ddim_diffusion_step,
-        )
-        # prev_alpha_bar_t = self.ddim_prev_alpha_bar[ddim_diffusion_step_idx]
+        alpha_bar_t = self.index(self.alpha_bar, diffusion_step=diffusion_step)
         prev_alpha_bar_t = self.index(
-            self.ddim_alpha_bar, diffusion_step=ddim_diffusion_step - 1,
+            self.alpha_bar, diffusion_step=diffusion_step - self.ddim_diffusion_step_size,
         )
-        ddim_sigma_t = self.ddim_sigma[ddim_diffusion_step_idx]
-        # ddim_sigma_t = self.index(self.ddim_sigma, diffusion_step=ddim_diffusion_step)
-        print(ddim_sigma_t)
-        pred_ori_image = (noisy_image - (1 - alpha_bar_t) ** 0.5 * pred_noise) / (alpha_bar_t ** 0.5)
-        # print("C")
+        
+        pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
+        pred_ori_image = (
+            noisy_image - (1 - alpha_bar_t) ** 0.5 * pred_noise
+        ) / (alpha_bar_t ** 0.5)
+
+        ddim_sigma_t = self.ddim_eta * (
+            (1 - prev_alpha_bar_t) / (1 - alpha_bar_t) * (1 - alpha_bar_t / prev_alpha_bar_t)
+        ) ** 0.5
         dir_xt = ((1 - prev_alpha_bar_t - ddim_sigma_t ** 2) ** 0.5) * pred_noise
 
-        if ddim_sigma_t == 0:
-            random_noise = 0
-        else:
-            random_noise = torch.randn(noisy_image.shape, device=noisy_image.device)
-        prev_noisy_image = (prev_alpha_bar_t ** 0.5) * pred_ori_image + dir_xt + ddim_sigma_t * random_noise
-        return prev_noisy_image
+        random_noise = self.sample_noise(batch_size=noisy_image.size(0))
+        denoised_image = (prev_alpha_bar_t ** 0.5) * pred_ori_image + dir_xt + ddim_sigma_t * random_noise
+        return denoised_image
 
-    def sample(self, batch_size, n_channels, img_size): # Reverse (denoising) process
-        x = self.sample_noise(batch_size=batch_size, n_channels=n_channels, img_size=img_size)
-        for idx, cur_ddim_diffusion_step in tqdm(enumerate(torch.flip(self.ddim_diffusion_step, dims=(0,))), total=self.n_ddim_diffusion_steps):
-            print(cur_ddim_diffusion_step, idx)
-            batch_cur_ddim_diffusion_step = torch.full(
-                size=(batch_size,), fill_value=cur_ddim_diffusion_step.item(), dtype=torch.long, device=self.device,
-            )
-            x = self.take_ddim_denoising_step(
-                x, batch_cur_ddim_diffusion_step, self.ddim_diffusion_step.size(0) - idx - 1,
-            )
+    def perform_denoising_process(self, noisy_image):
+        x = noisy_image
+        for diffusion_step_idx in  reversed(
+            range(0, self.n_diffusion_steps, self.ddim_diffusion_step_size),
+        ):
+            x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
         return x
+
+    def sample(self, batch_size):
+        random_noise = self.sample_noise(batch_size=batch_size)
+        return self.perform_denoising_process(noisy_image=random_noise)
 
 
 if __name__ == "__main__":
@@ -350,17 +358,14 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = DDIM(n_ddim_diffusion_steps=20, ddim_eta=0.5, device=DEVICE)
+    model = DDIM(img_size=32, n_ddim_diffusion_steps=20, ddim_eta=0.5, device=DEVICE)
     model_params_path = "/Users/jongbeomkim/Downloads/ddpm_celeba_32×32.pth"
     state_dict = torch.load(str(model_params_path), map_location=DEVICE)
     model.load_state_dict(state_dict["model"])
-    model.ddim_diffusion_step
+    # model.ddim_diffusion_step
+    # for ddim_diffusion_step_idx in reversed(range(0, model.n_diffusion_steps, model.n_diffusion_steps // model.n_ddim_diffusion_steps))
+    # list(range(0, model.n_diffusion_steps, model.n_diffusion_steps // model.n_ddim_diffusion_steps))
 
-    gen_image = model.sample(
-        batch_size=2,
-        n_channels=3,
-        img_size=32,
-        # device=DEVICE,
-    )
-    gen_grid = image_to_grid(gen_image, n_cols=1)
+    gen_image = model.sample(batch_size=36)
+    gen_grid = image_to_grid(gen_image, n_cols=6)
     gen_grid.show()
