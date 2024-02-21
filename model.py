@@ -290,14 +290,6 @@ class DDIM(nn.Module):
     def sample_noise(self, batch_size, n_channels, img_size):
         return torch.randn(size=(batch_size, n_channels, img_size, img_size), device=self.device)
 
-    def sample_diffusion_step(self, batch_size):
-        return torch.randint(0, self.n_diffusion_steps, size=(batch_size,), device=self.device)
-
-    def batchify_diffusion_steps(self, diffusion_step, batch_size):
-        return torch.full(
-            size=(batch_size,), fill_value=diffusion_step, dtype=torch.long, device=self.device,
-        )
-
     def forward(self, noisy_image, diffusion_step):
         return self.model(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
@@ -305,8 +297,15 @@ class DDIM(nn.Module):
         # print(ddim_diffusion_step_idx, diffusion_step)
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
-        alpha_bar_t = self.ddim_alpha_bar[ddim_diffusion_step_idx]
-        prev_alpha_bar_t = self.ddim_prev_alpha_bar[ddim_diffusion_step_idx]
+        # alpha_bar_t = self.ddim_alpha_bar[ddim_diffusion_step_idx]
+        alpha_bar_t = self.index(
+            self.ddim_alpha_bar, diffusion_step=ddim_diffusion_step_idx,
+        )
+        # prev_alpha_bar_t = self.ddim_prev_alpha_bar[ddim_diffusion_step_idx]
+        prev_alpha_bar_t = self.index(
+            self.ddim_alpha_bar, diffusion_step=ddim_diffusion_step_idx - 1,
+        )
+        print(prev_alpha_bar_t.item(), self.ddim_prev_alpha_bar[ddim_diffusion_step_idx].item())
         # print(f"{ddim_diffusion_step_idx}, {alpha_bar_t.item():.5f}, {prev_alpha_bar_t.item():.5f}")
         sigma_t = self.ddim_sigma[ddim_diffusion_step_idx]
         pred_ori_image = (noisy_image - (1 - alpha_bar_t) ** 0.5 * pred_noise) / (alpha_bar_t ** 0.5)
@@ -336,7 +335,7 @@ if __name__ == "__main__":
 
     DEVICE = get_device()
 
-    model = DDIM(n_ddim_diffusion_steps=20, device=DEVICE)
+    model = DDIM(n_ddim_diffusion_steps=20, ddim_eta=0.5, device=DEVICE)
     model_params_path = "/Users/jongbeomkim/Downloads/ddpm_celeba_32×32.pth"
     state_dict = torch.load(str(model_params_path), map_location=DEVICE)
     model.load_state_dict(state_dict["model"])
@@ -344,11 +343,10 @@ if __name__ == "__main__":
     # model.ddim_alpha_bar[-5:]
     # model.ddim_prev_alpha_bar[-5:]
     gen_image = model.sample(
-        batch_size=1,
+        batch_size=2,
         n_channels=3,
         img_size=32,
         # device=DEVICE,
     )
-
     gen_grid = image_to_grid(gen_image, n_cols=1)
     gen_grid.show()
