@@ -5,30 +5,75 @@ import torch
 import argparse
 
 from utils import get_device, save_image, image_to_grid
-from model import DDIM
-from ddpm import DDPM
+from unet import UNet
+from ddim import DDIM
 
-torch.set_printoptions(linewidth=70)
+
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--mode",
+        type=str,
+        required=True,
+        choices=["normal", "interpolation", "interpolation_on_grid"],
+    )
+    parser.add_argument("--model_params", type=str, required=True)
+    parser.add_argument("--save_path", type=str, required=True)
+    parser.add_argument("--img_size", type=int, required=True)
+    parser.add_argument("--n_ddim_steps", type=int, default=50, required=False)
+    parser.add_argument("--eta", type=float, default=0, required=False)
+
+    # For `"normal"`
+    parser.add_argument("--batch_size", type=int, required=False)
+
+    # For `"interpolation_on_grid"`
+    parser.add_argument("--n_rows", type=int, default=10, required=False)
+    parser.add_argument("--n_cols", type=int, default=10, required=False)
+
+    args = parser.parse_args()
+
+    args_dict = vars(args)
+    new_args_dict = dict()
+    for k, v in args_dict.items():
+        new_args_dict[k.upper()] = v
+    args = argparse.Namespace(**new_args_dict)
+    return args
+
+
+def main():
+    torch.set_printoptions(linewidth=70)
+
+    DEVICE = get_device()
+    args = get_args()
+
+    net = UNet()
+    model = DDIM(
+        model=net,
+        img_size=args.IMG_SIZE,
+        n_ddim_steps=args.N_DDIM_STEPS,
+        eta=args.ETA,
+        device=DEVICE,
+    )
+    state_dict = torch.load(str(args.MODEL_PARAMS), map_location=DEVICE)
+    model.load_state_dict(state_dict)
+
+    if args.MODE == "normal":
+        gen_image = model.sample(args.BATCH_SIZE)
+        gen_grid = image_to_grid(gen_image, n_cols=int(args.BATCH_SIZE ** 0.5))
+        save_image(gen_grid, save_path=args.SAVE_PATH)
+    else:
+        if args.MODE  == "interpolation":
+            gen_image = model.interpolate_in_latent_space()
+            gen_grid = image_to_grid(gen_image, n_cols=10)
+            save_image(gen_grid, save_path=args.SAVE_PATH)
+        elif args.MODE  == "interpolation_on_grid":
+            gen_image = model.interpolate_on_grid(
+                n_rows=args.N_ROWS, n_cols=args.N_COLS,
+            )
+            gen_grid = image_to_grid(gen_image, n_cols=args.N_COLS)
+            save_image(gen_grid, save_path=args.SAVE_PATH)
 
 
 if __name__ == "__main__":
-    DEVICE = get_device()
-
-    # model = DDIM(n_ddim_diffusion_steps=50, device=DEVICE)
-    model = DDIM(n_ddim_diffusion_steps=20, device=DEVICE)
-    # model = DDPM().to(DEVICE)
-    model_params_path = "/Users/jongbeomkim/Downloads/ddpm_celeba_32×32.pth"
-    state_dict = torch.load(str(model_params_path), map_location=DEVICE)
-    model.load_state_dict(state_dict["model"])
-
-    # model.ddim_alpha_bar[-5:]
-    # model.ddim_prev_alpha_bar[-5:]
-    gen_image = model.sample(
-        batch_size=1,
-        n_channels=3,
-        img_size=32,
-        # device=DEVICE,
-    )
-
-    gen_grid = image_to_grid(gen_image, n_cols=1)
-    gen_grid.show()
+    main()
