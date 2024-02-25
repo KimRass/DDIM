@@ -12,7 +12,7 @@ eta=0
 python3 ../sample.py\
     --mode="normal"\
     --model_params="$model_params"\
-    --save_path="$save_dir/normal/1.jpg"\
+    --save_path="$save_dir/normal/2.jpg"\
     --img_size=$img_size\
     --batch_size=100\
 

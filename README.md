@@ -6,3 +6,9 @@
 ## 3) `"interpolation_on_grid"` mode
 - <img src="https://github.com/KimRass/KimRass/assets/67457712/127dc5a2-4b56-4d59-af74-460848aceb50" width="700">
 - <img src="https://github.com/KimRass/KimRass/assets/67457712/40a5c5a9-379b-4fd8-9659-1dc933e48c3e" width="700">
+
+# 2. Theoretical Background
+- "Predicted $x_{0}$":
+$$\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}^{(t)}(x_{t})}{\sqrt{\alpha_{t}}}$$
+- "Direction pointing to $x_{t}$":
+$$\sqrt{1 - \alpha_{t - 1} - \sigma_{t}^{2}} \cdot \epsilon_{\theta}^{(t)}(x_{t})$$

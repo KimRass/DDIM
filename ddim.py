@@ -3,19 +3,15 @@
 
 import torch
 from torch import nn
-from torch.nn import functional as F
-import numpy as np
-import imageio
-import math
 from tqdm import tqdm
-from pathlib import Path
 
 from data import CelebADS
 
 
+# "We consider two types of selection procedure for   given the desired dim(  ) < T: • Linear: we select the timesteps such that  i = bcic for some c; • Quadratic: we select the timesteps such that  i = bci2c for some c. The constant value c is selected such that  􀀀1 is close to T. We used quadratic for CIFAR10 and linear for the remaining datasets. These choices achieve slightly better FID than their alternatives in the respective datasets."
 class DDIM(nn.Module):
     def get_linear_beta_schdule(self):
-        return torch.linspace(
+        self.beta = torch.linspace(
             self.init_beta,
             self.fin_beta,
             self.n_diffusion_steps,
@@ -45,7 +41,7 @@ class DDIM(nn.Module):
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
-        self.beta = self.get_linear_beta_schdule()
+        self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
@@ -55,10 +51,15 @@ class DDIM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return torch.index_select(
-            x,
-            dim=0,
-            index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
+        # "We define $\alpha_{0} := 1$."
+        return torch.where(
+            diffusion_step >= 0,
+            torch.index_select(
+                x,
+                dim=0,
+                index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
+            ),
+            torch.ones_like(diffusion_step, dtype=torch.float32),
         )[:, None, None, None]
 
     def sample_noise(self, batch_size):
@@ -78,9 +79,9 @@ class DDIM(nn.Module):
     def forward(self, noisy_image, diffusion_step):
         return self.model(noisy_image=noisy_image, diffusion_step=diffusion_step)
 
-
     @torch.inference_mode()
     def predict_ori_image(self, noisy_image, noise, alpha_bar_t):
+        # "$\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}^{(t)}(x_{t})}{\sqrt{\alpha_{t}}}$"
         return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)
 
     @torch.inference_mode()
@@ -102,6 +103,7 @@ class DDIM(nn.Module):
         sigma_t = self.eta * (
             (1 - prev_alpha_bar_t) / (1 - alpha_bar_t) * (1 - alpha_bar_t / prev_alpha_bar_t)
         ) ** 0.5
+        # "$\sqrt{1 - \alpha_{t - 1} - \sigma_{t}^{2}} \cdot \epsilon_{\theta}^{(t)}(x_{t})$"
         dir_xt = ((1 - prev_alpha_bar_t - sigma_t ** 2) ** 0.5) * pred_noise
 
         rand_noise = self.sample_noise(batch_size=noisy_image.size(0))

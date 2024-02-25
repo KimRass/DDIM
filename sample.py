@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, "/Users/jongbeomkim/Desktop/workspace/DDIM")
-
 import torch
 import argparse
 
