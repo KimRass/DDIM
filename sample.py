@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument("--img_size", type=int, required=True)
     parser.add_argument("--n_ddim_steps", type=int, default=50, required=False)
     parser.add_argument("--eta", type=float, default=0, required=False)
+    parser.add_argument("--trunc_normal_thresh", type=float, required=False)
 
     # For `"normal"`
     parser.add_argument("--batch_size", type=int, required=False)
@@ -56,17 +57,19 @@ def main():
     model.load_state_dict(state_dict)
 
     if args.MODE == "normal":
-        gen_image = model.sample(args.BATCH_SIZE)
+        gen_image = model.sample(
+            batch_size=args.BATCH_SIZE, thresh=args.TRUNC_NORMAL_THRESH,
+        )
         gen_grid = image_to_grid(gen_image, n_cols=int(args.BATCH_SIZE ** 0.5))
         save_image(gen_grid, save_path=args.SAVE_PATH)
     else:
         if args.MODE  == "interpolation":
-            gen_image = model.interpolate_in_latent_space()
+            gen_image = model.interpolate_in_latent_space(thresh=args.TRUNC_NORMAL_THRESH)
             gen_grid = image_to_grid(gen_image, n_cols=10)
             save_image(gen_grid, save_path=args.SAVE_PATH)
         elif args.MODE  == "interpolation_on_grid":
             gen_image = model.interpolate_on_grid(
-                n_rows=args.N_ROWS, n_cols=args.N_COLS,
+                n_rows=args.N_ROWS, n_cols=args.N_COLS, thresh=args.TRUNC_NORMAL_THRESH,
             )
             gen_grid = image_to_grid(gen_image, n_cols=args.N_COLS)
             save_image(gen_grid, save_path=args.SAVE_PATH)

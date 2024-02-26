@@ -1,9 +1,11 @@
 # References:
     # https://nn.labml.ai/diffusion/stable_diffusion/sampler/ddim.html
+    # https://discuss.pytorch.org/t/implementing-truncated-normal-initializer/4778/16
 
 import torch
 from torch import nn
 from tqdm import tqdm
+from scipy.stats import truncnorm
 
 from data import CelebADS
 
@@ -58,11 +60,37 @@ class DDIM(nn.Module):
             index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
         )[:, None, None, None]
 
-    def sample_noise(self, batch_size):
-        return torch.randn(
-            size=(batch_size, self.image_channels, self.img_size, self.img_size),
+    def sample_from_trunc_normal(self, size, thresh=1):
+        x = torch.randn(size=size, device=self.device)
+        while True:
+            mask = (-thresh <= x) & (x <= thresh)
+            if torch.all(mask).item():
+                break
+            x[~mask] = torch.randn_like(x, device=self.device)[~mask]
+        return x
+
+    def sample_from_trunc_normal2(self, batch_size, thresh=1):
+        return torch.tensor(
+            truncnorm.rvs(
+                -thresh,
+                thresh,
+                size=(batch_size, self.image_channels, self.img_size, self.img_size)
+            ),
+            dtype=torch.float32,
             device=self.device,
         )
+
+    def sample_noise(self, batch_size, thresh=None):
+        if thresh is None:
+            return torch.randn(
+                size=(batch_size, self.image_channels, self.img_size, self.img_size),
+                device=self.device,
+            )
+        else:
+            return self.sample_from_trunc_normal(
+                size=(batch_size, self.image_channels, self.img_size, self.img_size),
+                thresh=thresh,
+            )
 
     def batchify_diffusion_steps(self, diffusion_step_idx, batch_size):
         return torch.full(
@@ -90,7 +118,7 @@ class DDIM(nn.Module):
         prev_alpha_bar_t = self.index(
             self.alpha_bar, diffusion_step=diffusion_step - self.ddim_step_size,
         )
-        
+
         pred_noise = self(noisy_image=noisy_image, diffusion_step=diffusion_step)
         pred_ori_image  = self.predict_ori_image(
             noisy_image=noisy_image, noise=pred_noise, alpha_bar_t=alpha_bar_t,
@@ -127,8 +155,8 @@ class DDIM(nn.Module):
             x = self.take_denoising_step(x, diffusion_step_idx=diffusion_step_idx)
         return x
 
-    def sample(self, batch_size):
-        rand_noise = self.sample_noise(batch_size=batch_size)
+    def sample(self, batch_size, thresh=None):
+        rand_noise = self.sample_noise(batch_size=batch_size, thresh=thresh)
         return self.perform_denoising_process(noisy_image=rand_noise)
 
     def get_ori_images(self, data_dir, image_idx1, image_idx2):
@@ -155,22 +183,28 @@ class DDIM(nn.Module):
             start=0, end=1, steps=n_points, device=self.device,
         )[:, None, None, None]
 
-    def _get_spherically_interpolated_rand_noise(self, n_points):
-        rand_noise1 = self.sample_noise(batch_size=1)
-        rand_noise2 = self.sample_noise(batch_size=1)
+    def _get_spherically_interpolated_rand_noise(self, n_points, thresh=None):
+        rand_noise1 = self.sample_noise(batch_size=1, thresh=thresh)
+        rand_noise2 = self.sample_noise(batch_size=1, thresh=thresh)
         ang = self.get_angle(rand_noise1, rand_noise2)
         weight = self.get_interpolation_weight(n_points)
         x_weight = torch.sin((1 - weight) * ang) / torch.sin(ang)
         y_weight = torch.sin(weight * ang) / torch.sin(ang)
         return x_weight * rand_noise1 + y_weight * rand_noise2
 
-    def interpolate_in_latent_space(self, n_points=10):
-        rand_noise = self._get_spherically_interpolated_rand_noise(n_points=n_points)
+    def interpolate_in_latent_space(self, n_points=10, thresh=None):
+        rand_noise = self._get_spherically_interpolated_rand_noise(
+            n_points=n_points, thresh=thresh,
+        )
         return self.perform_denoising_process(rand_noise)
 
-    def interpolate_on_grid(self, n_rows=5, n_cols=10):
-        rand_noise1 = self._get_spherically_interpolated_rand_noise(n_points=n_rows)
-        rand_noise2 = self._get_spherically_interpolated_rand_noise(n_points=n_rows)
+    def interpolate_on_grid(self, n_rows=5, n_cols=10, thresh=None):
+        rand_noise1 = self._get_spherically_interpolated_rand_noise(
+            n_points=n_rows, thresh=thresh,
+        )
+        rand_noise2 = self._get_spherically_interpolated_rand_noise(
+            n_points=n_rows, thresh=thresh,
+        )
         ang = self.get_angle(rand_noise1, rand_noise2)
         weight = self.get_interpolation_weight(n_cols)
         x_weight = torch.sin((1 - weight) * ang.unsqueeze(1)) / torch.sin(ang.unsqueeze(1))

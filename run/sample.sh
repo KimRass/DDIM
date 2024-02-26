@@ -8,19 +8,22 @@ save_dir="/Users/jongbeomkim/Desktop/workspace/DDIM/samples/"
 img_size=64
 n_ddim_steps=50
 eta=0
+trunc_normal_thresh=2.5
 
 python3 ../sample.py\
     --mode="normal"\
     --model_params="$model_params"\
-    --save_path="$save_dir/normal/4.jpg"\
+    --save_path="$save_dir/normal/trunc_normal_thresh=3.jpg"\
     --img_size=$img_size\
     --batch_size=100\
+    --trunc_normal_thresh=$trunc_normal_thresh\
 
 # python3 ../sample.py\
 #     --mode="interpolation"\
 #     --model_params="$model_params"\
 #     --save_path="$save_dir/interpolation/4.jpg"\
 #     --img_size=$img_size\
+#     --trunc_normal_thresh=$trunc_normal_thresh\
 
 # python3 ../sample.py\
 #     --mode="interpolation_on_grid"\
@@ -29,3 +32,4 @@ python3 ../sample.py\
 #     --img_size=$img_size\
 #     --n_rows=10\
 #     --n_cols=10\
+#     --trunc_normal_thresh=$trunc_normal_thresh\
