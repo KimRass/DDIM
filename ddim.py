@@ -8,7 +8,8 @@ from tqdm import tqdm
 from data import CelebADS
 
 
-# "We consider two types of selection procedure for   given the desired dim(  ) < T: • Linear: we select the timesteps such that  i = bcic for some c; • Quadratic: we select the timesteps such that  i = bci2c for some c. The constant value c is selected such that  􀀀1 is close to T. We used quadratic for CIFAR10 and linear for the remaining datasets. These choices achieve slightly better FID than their alternatives in the respective datasets."
+# "We consider two types of selection procedure for given the desired dim(  ) < T: • Linear: we select the timesteps such that  i = bcic for some c; • Quadratic: we select the timesteps such that  i = bci2c for some c. The constant value c is selected such that  􀀀1 is close to T. We used quadratic for CIFAR10 and linear for the remaining datasets. These choices achieve slightly better FID than their alternatives in the respective datasets."
+# "현재 Linear만 구현되어 있습니다."
 class DDIM(nn.Module):
     def get_linear_beta_schdule(self):
         self.beta = torch.linspace(
@@ -41,25 +42,20 @@ class DDIM(nn.Module):
         self.init_beta = init_beta
         self.fin_beta = fin_beta
 
+        self.model = model.to(device)
+
         self.get_linear_beta_schdule()
         self.alpha = 1 - self.beta
         self.alpha_bar = torch.cumprod(self.alpha, dim=0)
 
         self.ddim_step_size = self.n_diffusion_steps // n_ddim_steps
 
-        self.model = model.to(device)
-
     @staticmethod
     def index(x, diffusion_step):
-        # "We define $\alpha_{0} := 1$."
-        return torch.where(
-            diffusion_step >= 0,
-            torch.index_select(
-                x,
-                dim=0,
-                index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
-            ),
-            torch.ones_like(diffusion_step, dtype=torch.float32),
+        return torch.index_select(
+            x,
+            dim=0,
+            index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
         )[:, None, None, None]
 
     def sample_noise(self, batch_size):
@@ -105,10 +101,18 @@ class DDIM(nn.Module):
         ) ** 0.5
         # "$\sqrt{1 - \alpha_{t - 1} - \sigma_{t}^{2}} \cdot \epsilon_{\theta}^{(t)}(x_{t})$"
         dir_xt = ((1 - prev_alpha_bar_t - sigma_t ** 2) ** 0.5) * pred_noise
+        model_mean = (prev_alpha_bar_t ** 0.5) * pred_ori_image + dir_xt
 
-        rand_noise = self.sample_noise(batch_size=noisy_image.size(0))
-        denoised_image = (prev_alpha_bar_t ** 0.5) * pred_ori_image + dir_xt + sigma_t * rand_noise
-        return denoised_image
+        model_var = sigma_t ** 2
+        # "We define $\alpha_{0} := 1$."
+        if diffusion_step_idx > 0:
+            rand_noise = self.sample_noise(batch_size=noisy_image.size(0))
+        else:
+            rand_noise = torch.zeros(
+                size=(noisy_image.size(0), self.image_channels, self.img_size, self.img_size),
+                device=self.device,
+            )
+        return model_mean + (model_var ** 0.5) * rand_noise
 
     def perform_denoising_process(self, noisy_image):
         x = noisy_image
