@@ -26,6 +26,6 @@
 - "Predicted $x_{0}$":
 $$\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}^{(t)}(x_{t})}{\sqrt{\alpha_{t}}}$$
 - "Direction pointing to $x_{t}$":
-$$\sqrt{1 - \alpha_{t - 1} - \sigma_{t}^{2}} \cdot \epsilon_{\theta}^{(t)}(x_{t})$$
+$$\sqrt{1 - \alpha_{t - 1} - \sigma_{t}^{2}} \epsilon_{\theta}^{(t)}(x_{t})$$
 ## 1) Backward (Denoising) Process
 $$x_{t - 1} = \sqrt{\alpha_{t - 1}}\Bigg(\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}}{\sqrt{\alpha_{t}}}\Bigg) + \sqrt{1 - \alpha_{t - 1}}\epsilon_{\theta}$$
