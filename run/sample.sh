@@ -13,9 +13,9 @@ trunc_normal_thresh=2.5
 python3 ../sample.py\
     --mode="normal"\
     --model_params="$model_params"\
-    --save_path="$save_dir/normal/trunc_normal_thresh=3.jpg"\
+    --save_path="$save_dir/normal/test.jpg"\
     --img_size=$img_size\
-    --batch_size=100\
+    --batch_size=1\
     --trunc_normal_thresh=$trunc_normal_thresh\
 
 # python3 ../sample.py\

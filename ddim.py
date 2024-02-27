@@ -54,11 +54,7 @@ class DDIM(nn.Module):
 
     @staticmethod
     def index(x, diffusion_step):
-        return torch.index_select(
-            x,
-            dim=0,
-            index=torch.maximum(diffusion_step, torch.zeros_like(diffusion_step)),
-        )[:, None, None, None]
+        return x[torch.clip(diffusion_step, min=0)][:, None, None, None]
 
     def sample_from_trunc_normal(self, size, thresh=1):
         x = torch.randn(size=size, device=self.device)
