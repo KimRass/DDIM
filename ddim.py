@@ -101,7 +101,9 @@ class DDIM(nn.Module):
 
     @torch.inference_mode()
     def predict_ori_image(self, noisy_image, noise, alpha_bar_t):
-        # "$\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}^{(t)}(x_{t})}{\sqrt{\alpha_{t}}}$"
+        """
+        $\frac{x_{t} - \sqrt{1 - \alpha_{t}}\epsilon_{\theta}^{(t)}(x_{t})}{\sqrt{\alpha_{t}}}$
+        """
         return (noisy_image - ((1 - alpha_bar_t) ** 0.5) * noise) / (alpha_bar_t ** 0.5)
 
     @torch.inference_mode()
