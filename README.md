@@ -3,17 +3,18 @@
 | `mode="normal"`, `trunc_normal_thresh=None` |
 |:-:|
 | <img src="https://github.com/KimRass/KimRass/assets/67457712/e3e4731d-98cc-41de-b63b-9d3136bcbaed" width="700"> |
-## 2) "interpolation" mode
+## 2) "interpolation" Mode
 | `mode="inerpolation"` |
 |:-:|
 | <img src="https://github.com/KimRass/KimRass/assets/67457712/8403ce36-c1d0-4289-874d-1ca48cec8f9d" width="700"> |
-## 3) "interpolation_on_grid" mode
+| <img src="https://github.com/KimRass/DDIM/assets/67457712/124b2d89-d1f8-4631-a7be-6cd036ef2ea1" width="700"> |
+| <img src="https://github.com/KimRass/DDIM/assets/67457712/944487ac-a8f1-420e-a737-3a6bc31f60ec" width="700"> |
+| <img src="https://github.com/KimRass/DDIM/assets/67457712/2959a300-f168-4aff-924d-882341f97faf" width="700"> |
+
+## 3) "interpolation_on_grid" Mode
 | `mode="inerpolation_on_grid"` |
 |:-:|
 | <img src="https://github.com/KimRass/KimRass/assets/67457712/127dc5a2-4b56-4d59-af74-460848aceb50" width="700"> |
-
-| `mode="inerpolation_on_grid"` |
-|:-:|
 | <img src="https://github.com/KimRass/KimRass/assets/67457712/40a5c5a9-379b-4fd8-9659-1dc933e48c3e" width="700"> |
 
 # 2. Experiments
@@ -33,7 +34,6 @@
 | `mode="normal"`, `trunc_normal_thresh=3` |
 |:-:|
 | <img src="https://github.com/KimRass/KimRass/assets/67457712/f2d4a0d6-9f29-459f-89ef-ef95f2e39f77" width="276"> |
-
 
 # 3. Theoretical Background
 - "Predicted $x_{0}$":
