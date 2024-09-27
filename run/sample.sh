@@ -26,9 +26,9 @@ python3 ../sample.py\
 #     --trunc_normal_thresh=$trunc_normal_thresh\
 
 # python3 ../sample.py\
-#     --mode="interpolation_on_grid"\
+#     --mode="grid_interpolation"\
 #     --model_params="$model_params"\
-#     --save_path="$save_dir/interpolation_on_grid/0.jpg"\
+#     --save_path="$save_dir/grid_interpolation/0.jpg"\
 #     --img_size=$img_size\
 #     --n_rows=10\
 #     --n_cols=10\

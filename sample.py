@@ -13,7 +13,7 @@ def get_args():
         "--mode",
         type=str,
         required=True,
-        choices=["normal", "interpolation", "interpolation_on_grid"],
+        choices=["normal", "interpolation", "grid_interpolation"],
     )
     parser.add_argument("--model_params", type=str, required=True)
     parser.add_argument("--save_path", type=str, required=True)
@@ -25,7 +25,7 @@ def get_args():
     # For `"normal"`
     parser.add_argument("--batch_size", type=int, required=False)
 
-    # For `"interpolation_on_grid"`
+    # For `"grid_interpolation"`
     parser.add_argument("--n_rows", type=int, default=10, required=False)
     parser.add_argument("--n_cols", type=int, default=10, required=False)
 
@@ -67,7 +67,7 @@ def main():
             gen_image = model.interpolate_in_latent_space(thresh=args.TRUNC_NORMAL_THRESH)
             gen_grid = image_to_grid(gen_image, n_cols=10)
             save_image(gen_grid, save_path=args.SAVE_PATH)
-        elif args.MODE  == "interpolation_on_grid":
+        elif args.MODE  == "grid_interpolation":
             gen_image = model.interpolate_on_grid(
                 n_rows=args.N_ROWS, n_cols=args.N_COLS, thresh=args.TRUNC_NORMAL_THRESH,
             )
